@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+  medvault_backend:
+    build: ./medvault_backend
+    command: >
+      bash -c "\
+        python manage.py migrate && \
+        python manage.py create_default_admin && \
+        python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/medvault
+      DJANGO_SUPERUSER_USERNAME: testuser
+      DJANGO_SUPERUSER_EMAIL: testuser@example.com
+      DJANGO_SUPERUSER_PASSWORD: testpass
+    volumes:
+      - ./medvault_backend/media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000" # Backend API, JWT login, and Django admin
+  medvault_frontend:
+    build: ./medvault_frontend
+    ports:
+      - "3000:80" # Frontend UI
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: medvault
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  db_data: 
