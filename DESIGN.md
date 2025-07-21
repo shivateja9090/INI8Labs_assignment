@@ -1,64 +1,50 @@
 # MedVault: System Design & Architecture
 
-## 1. Tech Stack & Architecture
+## Stack & Architecture
 - **Frontend:** React (Vite, Material UI)
-- **Backend:** Django + Django REST Framework (Python)
-- **Database:** PostgreSQL (Dockerized)
+- **Backend:** Django REST Framework
+- **Database:** PostgreSQL (Docker)
 - **File Storage:** Local disk (Docker volume)
-- **Containerization:** Docker Compose
+- **Orchestration:** Docker Compose
 
-### High-Level Architecture
-```
-[Frontend (React)]
-      |
-      v
-[Backend API (Django)]
-   +----+----+
-   |         |
-[PostgreSQL] [File Storage]
-```
+### Architecture Overview
+Frontend (React) talks to Backend (Django REST API), which stores metadata in PostgreSQL and files on disk. Everything runs in Docker containers for easy local setup. The frontend handles JWT login and stores the token in localStorage, sending it with all API requests.
 
-### Key Components
-- **Frontend:** File upload, list, download, delete UI (Material UI)
-- **Backend:** REST API, file validation, metadata storage, file serving
-- **DB:** Stores file metadata (filename, path, patient_id, size, date)
-- **File Storage:** Stores PDFs (not exposed directly)
-- **Admin User Creation:** Robust, automatic admin user creation using a custom Django management command and environment variables in `docker-compose.yml` (recommended for onboarding and CI/CD)
+## Data Flow
+- User logs in (JWT auth, token stored in browser)
+- Uploads PDF (frontend → backend → disk, metadata in DB)
+- Backend validates file type and size (PDF, max 10MB)
+- User can list, download, or delete their documents
+- All API calls require a valid JWT in the Authorization header
 
-## 2. Data Flow
-- **Upload:** Frontend → API (multipart) → Validate & store file → Save metadata in DB
-- **List:** Frontend → API (GET) → Return metadata list
-- **Download:** Frontend → API (GET) → Stream file
-- **Delete:** Frontend → API (DELETE) → Remove file & metadata
+## API
+- `/login/` (POST, username/password → JWT)
+- `/documents/upload/` (POST, PDF, JWT required)
+- `/documents/` (GET, JWT required)
+- `/documents/<id>/download/` (GET, JWT required)
+- `/documents/<id>/` (DELETE, JWT required)
 
-## 3. API Specification
-- `POST   /login/` (JSON: username, password → returns JWT access token)
-- `POST   /documents/upload/` (multipart/form-data: file, patient_id, JWT required)
-- `GET    /documents/` (list all documents, JWT required)
-- `GET    /documents/<id>/download/` (download PDF, JWT required)
-- `DELETE /documents/<id>/` (delete document, JWT required)
+## Security & Onboarding
+- All endpoints require JWT auth (handled in frontend and backend)
+- Only PDFs allowed, max 10MB (checked in backend)
+- Admin user is created automatically on first run using a custom Django management command and environment variables in Docker Compose. This makes onboarding and CI/CD easy—no manual user creation needed.
 
-## 4. Key Considerations
-- **Scalability:** Can scale horizontally; file storage can move to S3/minio
-- **File Storage:** Local disk for PoC; S3/minio for production
-- **Error Handling:** 404 for missing files, 400 for invalid files
-- **Security:** PDF validation, JWT auth, no real file paths exposed
-- **Onboarding:** Admin user is created automatically on first run using environment variables and a custom management command
+## Error Handling & Extensibility
+- Backend returns clear error messages for invalid files, missing JWT, or unauthorized actions
+- Frontend shows user-friendly messages and loading states
+- Stack is easy to extend: swap local disk for S3, add Redis, or use a production DB with minimal changes
 
-## 5. CI/CD Pipeline
-- **Build:** Lint, type-check, build Docker images
-- **Test:** Run backend unit tests
-- **Lint:** ESLint/flake8
-- **Artifact Validation:** Ensure images build and run
-- **Onboarding:** Admin user creation is automated for CI/CD and local dev
+## Dev & CI/CD
+- All services run in Docker Compose
+- Backend runs migrations and creates admin user on startup
+- Tests can be run with `pytest`
+- The admin user creation command is run automatically in CI/CD and local dev
 
-## 6. Infrastructure as Code (IaC)
-- See `docker-compose.yml`, `Dockerfile` in each service
-- File storage mounted as Docker volume
-- Admin user creation is handled by a custom management command in the backend service
+## Why this approach?
+- Docker Compose makes onboarding and local dev easy
+- JWT auth is simple and works for both UI and API
+- Custom management command for admin user is robust and works in CI/CD
+- Stack is easy to extend for real-world needs (S3, Redis, etc.)
 
-## 7. Design Justification
-- **File Storage:** Local disk is simple for PoC, easy to mount in Docker, can be swapped for S3/minio
-- **HIPAA Compliance:** Would require encrypted storage, audit logs, strict access controls, encrypted DB, secure backups
-- **Antivirus:** Integrate ClamAV or similar; scan files on upload before saving/serving
-- **Admin User Creation:** Using a custom management command and environment variables is robust, repeatable, and works for onboarding, CI/CD, and local development 
+---
+If you want to extend or deploy this, just add a real user model, S3 storage, or production DB as needed. The codebase is intentionally simple and easy to adapt. 
